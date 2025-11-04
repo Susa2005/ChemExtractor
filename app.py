@@ -1,8 +1,8 @@
-import streamlit as st
 import pandas as pd
 import requests
 from concurrent.futures import ThreadPoolExecutor, as_completed
-import time, random, os
+import time, random, io
+import streamlit as st
 
 # ------------------ Core Functions ------------------
 
@@ -42,66 +42,59 @@ def get_classyfire_info(inchikey, retries=3, base_delay=1.5):
     return {'Class': None, 'Subclass': None, 'Superclass': None}
 
 
-def process_data(df):
+def process_file(uploaded_file):
+    df = pd.read_excel(uploaded_file)
     compound_names = df.iloc[:, 0].dropna().unique()
-    results = []
 
-    progress = st.progress(0)
-    status = st.empty()
-
-    status.text("Fetching PubChem data...")
+    st.info("Fetching PubChem data...")
     pubchem_results = []
+    progress_text = st.empty()
+    progress_bar = st.progress(0)
+
     with ThreadPoolExecutor(max_workers=8) as executor:
         future_to_compound = {executor.submit(get_pubchem_info, c): c for c in compound_names}
         for i, future in enumerate(as_completed(future_to_compound)):
             data = future.result()
             if data:
                 pubchem_results.append(data)
-            progress.progress(int(((i + 1) / len(compound_names)) * 50))
+            progress_bar.progress((i + 1) / len(compound_names) * 0.5)
+            progress_text.text(f"Fetched PubChem data for {i+1}/{len(compound_names)} compounds")
 
-    status.text("Annotating with ClassyFire...")
+    st.info("Annotating with ClassyFire...")
     final_results = []
     for i, item in enumerate(pubchem_results):
         classy = get_classyfire_info(item['InChIKey'])
         combined = {**item, **classy}
         final_results.append(combined)
-        progress.progress(50 + int(((i + 1) / len(pubchem_results)) * 50))
+        progress_bar.progress(0.5 + (i + 1) / len(pubchem_results) * 0.5)
+        progress_text.text(f"Classified {i+1}/{len(pubchem_results)} compounds")
 
-    status.text("✅ Done! Data processed successfully.")
-    return pd.DataFrame(final_results)
+    st.success("✅ Done! All compounds processed successfully.")
+    result_df = pd.DataFrame(final_results)
+    return result_df
+
 
 # ------------------ Streamlit UI ------------------
 
-st.set_page_config(page_title="Chemical Data Extractor", page_icon="🧪")
+st.title("🧪 Chemical Data Extractor (PubChem + ClassyFire)")
+st.write("Upload an Excel file with compound names in the first column.")
 
-st.title("🧬 ChemExtractor")
-st.markdown("Upload an Excel file containing **compound names** (first column). The app will fetch details from **PubChem** and **ClassyFire** automatically.")
-
-uploaded_file = st.file_uploader("📂 Upload Excel File", type=["xlsx", "xls"])
+uploaded_file = st.file_uploader("Choose an Excel file (.xlsx)", type=["xlsx", "xls"])
 
 if uploaded_file:
-    df = pd.read_excel(uploaded_file)
-    st.write("### Preview of Uploaded File:")
-    st.dataframe(df.head())
+    if st.button("Start Extraction"):
+        with st.spinner("Processing... Please wait."):
+            result_df = process_file(uploaded_file)
+            st.dataframe(result_df)
 
-    if st.button("🚀 Start Extraction"):
-        with st.spinner("Processing compounds..."):
-            output_df = process_data(df)
+            # Prepare Excel download
+            buffer = io.BytesIO()
+            result_df.to_excel(buffer, index=False)
+            buffer.seek(0)
 
-        st.success("Extraction completed successfully!")
-        st.write("### Extracted Data:")
-        st.dataframe(output_df)
-
-        # Download option
-        output_path = "chem_data_output.xlsx"
-        output_df.to_excel(output_path, index=False)
-        with open(output_path, "rb") as f:
             st.download_button(
-                label="⬇️ Download Processed Excel File",
-                data=f,
-                file_name="ChemExtractor_Output.xlsx",
+                label="📥 Download Processed Data (Excel)",
+                data=buffer,
+                file_name="ChemicalData_Output.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
-
-else:
-    st.info("👆 Please upload an Excel file to get started.")
