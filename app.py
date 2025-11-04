@@ -4,44 +4,6 @@ import time, random, io
 import streamlit as st
 from streamlit_lottie import st_lottie
 
-# ------------------ XO Game Function ------------------
-def xo_game():
-    st.sidebar.subheader("Play XO (Tic-Tac-Toe) While You Wait!")
-    if "xo_board" not in st.session_state:
-        st.session_state.xo_board = [""] * 9
-        st.session_state.xo_turn = "X"
-        st.session_state.xo_winner = None
-
-    board = st.session_state.xo_board
-    turn = st.session_state.xo_turn
-    winner = st.session_state.xo_winner
-
-    cols = st.sidebar.columns(3)
-    for i in range(3):
-        for j in range(3):
-            idx = i * 3 + j
-            if board[idx] == "":
-                if cols[j].button("", key=f"xo_{idx}"):
-                    board[idx] = turn
-                    turn = "O" if turn == "X" else "X"
-                    st.session_state.xo_turn = turn
-
-    wins = [(0,1,2),(3,4,5),(6,7,8),(0,3,6),(1,4,7),(2,5,8),(0,4,8),(2,4,6)]
-    for a, b, c in wins:
-        if board[a] and board[a] == board[b] and board[a] == board[c]:
-            winner = board[a]
-            st.session_state.xo_winner = winner
-
-    st.sidebar.write("Turn:", turn)
-    if winner:
-        st.sidebar.success(f"{winner} wins! 🎉")
-        if st.sidebar.button("Restart XO Game"):
-            st.session_state.xo_board = [""] * 9
-            st.session_state.xo_turn = "X"
-            st.session_state.xo_winner = None
-
-# Sidebar XO game
-xo_game()
 
 # ------------------ Core Functions ------------------
 def get_pubchem_info(compound_name):
@@ -60,6 +22,7 @@ def get_pubchem_info(compound_name):
     except Exception:
         return None
 
+
 def get_classyfire_info(inchikey, retries=3, base_delay=1.5):
     if not inchikey:
         return {'Class': None, 'Subclass': None, 'Superclass': None}
@@ -77,6 +40,7 @@ def get_classyfire_info(inchikey, retries=3, base_delay=1.5):
         except Exception:
             time.sleep(base_delay + random.uniform(0, 1.5))
     return {'Class': None, 'Subclass': None, 'Superclass': None}
+
 
 def process_file(uploaded_file):
     df = pd.read_excel(uploaded_file)
@@ -142,9 +106,10 @@ def process_file(uploaded_file):
         time.sleep(0.25)
 
     st.success("✅ Done! All compounds processed successfully.")
-    st.success("Incomplete details for certain compounds were detected, likely due to API rate limits or missing records. Manual verification is recommended.")
+    st.success("Incomplete details for certain compounds may have occurred due to API limits or missing data.")
     result_df = pd.DataFrame(final_results)
     return result_df
+
 
 # ------------------ Load Animation ------------------
 def load_lottie_url(url):
@@ -156,27 +121,28 @@ def load_lottie_url(url):
     except Exception:
         return None
 
+
 loading_animation = load_lottie_url("https://assets9.lottiefiles.com/packages/lf20_tll0j4bb.json")
 done_animation = load_lottie_url("https://assets1.lottiefiles.com/private_files/lf30_editor_bqvwlczk.json")
+
 
 # ------------------ Custom Styling ------------------
 st.markdown("""
     <style>
-    body {
-        background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
-        color: white;
-    }
     .stApp {
-        background: linear-gradient(135deg, #1e3c72, #2a5298);
+        background: linear-gradient(-45deg, #1e3c72, #2a5298, #ff9966, #ff5e62);
+        background-size: 400% 400%;
+        animation: gradientBG 15s ease infinite;
         color: white;
     }
-    h1 {
+    @keyframes gradientBG {
+        0% {background-position:0% 50%;}
+        50% {background-position:100% 50%;}
+        100% {background-position:0% 50%;}
+    }
+    h1, h3, p {
         text-align: center;
         font-family: 'Segoe UI', sans-serif;
-        color: #ffffff;
-        font-size: 2.5em;
-    }
-    .css-1v3fvcr, .css-18ni7ap {
         color: #ffffff;
     }
     .stButton>button {
@@ -210,10 +176,11 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
+
 # ------------------ Main UI ------------------
 st.title("🧪 Chemical Data Extractor")
-st.markdown("<h3 style='text-align:center; color:#dbe9ff;'>Fetch molecular, lipophilicity & classification data instantly.</h3>", unsafe_allow_html=True)
-st.markdown("<p style='text-align:center;'>Upload an Excel file with compound names in the first column.</p>", unsafe_allow_html=True)
+st.markdown("<h3>Fetch molecular, lipophilicity & classification data instantly.</h3>", unsafe_allow_html=True)
+st.markdown("<p>Upload an Excel file with compound names in the first column.</p>", unsafe_allow_html=True)
 
 uploaded_file = st.file_uploader("📂 Choose an Excel file (.xlsx)", type=["xlsx", "xls"])
 
@@ -245,7 +212,6 @@ if uploaded_file:
                 file_name="ChemicalData_Output.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
-
 else:
     if loading_animation:
         st_lottie(loading_animation, speed=0.5, height=250, key="waiting")
