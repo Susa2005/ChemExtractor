@@ -124,10 +124,7 @@ def load_lottie_url(url):
 loading_animation = load_lottie_url("https://assets9.lottiefiles.com/packages/lf20_tll0j4bb.json")
 done_animation = load_lottie_url("https://assets1.lottiefiles.com/private_files/lf30_editor_bqvwlczk.json")
 
-if done_animation:
-    st_lottie(done_animation, height=180, key="done")
-else:
-    st.warning("✅ Extraction complete.")
+
 
 # ------------------ Custom Styling ------------------
 st.markdown("""
