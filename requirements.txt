@@ -8,3 +8,4 @@ lxml
 matplotlib
 scikit-learn
 openpyxl
+streamlit-lottie
