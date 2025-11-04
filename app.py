@@ -1,8 +1,8 @@
 import pandas as pd
 import requests
-from concurrent.futures import ThreadPoolExecutor, as_completed
 import time, random, io
 import streamlit as st
+
 
 # ------------------ Core Functions ------------------
 
@@ -46,28 +46,64 @@ def process_file(uploaded_file):
     df = pd.read_excel(uploaded_file)
     compound_names = df.iloc[:, 0].dropna().unique()
 
-    st.info("Fetching PubChem data...")
+    st.info("Fetching PubChem data sequentially with rate limiting...")
     pubchem_results = []
     progress_text = st.empty()
     progress_bar = st.progress(0)
 
-    with ThreadPoolExecutor(max_workers=8) as executor:
-        future_to_compound = {executor.submit(get_pubchem_info, c): c for c in compound_names}
-        for i, future in enumerate(as_completed(future_to_compound)):
-            data = future.result()
-            if data:
-                pubchem_results.append(data)
-            progress_bar.progress((i + 1) / len(compound_names) * 0.5)
-            progress_text.text(f"Fetched PubChem data for {i+1}/{len(compound_names)} compounds")
+    for i, compound in enumerate(compound_names):
+        data = None
+        retries = 3
+        delay = 1
+        while retries > 0:
+            data = get_pubchem_info(compound)
+            if data is not None:
+                break
+            else:
+                time.sleep(delay)
+                delay *= 2  # exponential backoff
+                retries -= 1
 
-    st.info("Annotating with ClassyFire...")
+        if data:
+            pubchem_results.append(data)
+        else:
+            pubchem_results.append({
+                'Compound Name': compound,
+                'SMILES': None,
+                'InChIKey': None,
+                'Molecular Formula': None,
+                'Lipophilicity (XLogP)': None
+            })
+
+        progress_bar.progress((i + 1) / len(compound_names) * 0.5)
+        progress_text.text(f"Fetched PubChem data for {i + 1}/{len(compound_names)} compounds")
+        time.sleep(0.25)  # 0.25s delay to stay within ~4 requests/sec
+
+    st.info("Annotating with ClassyFire sequentially with rate limiting...")
     final_results = []
     for i, item in enumerate(pubchem_results):
-        classy = get_classyfire_info(item['InChIKey'])
-        combined = {**item, **classy}
+        inchikey = item['InChIKey']
+        retries = 3
+        delay = 1
+        classy = None
+        while retries > 0:
+            classy = get_classyfire_info(inchikey)
+            if classy['Class'] is not None:
+                break
+            else:
+                time.sleep(delay)
+                delay *= 2
+                retries -= 1
+
+        if classy:
+            combined = {**item, **classy}
+        else:
+            combined = {**item, 'Class': None, 'Subclass': None, 'Superclass': None}
+
         final_results.append(combined)
         progress_bar.progress(0.5 + (i + 1) / len(pubchem_results) * 0.5)
-        progress_text.text(f"Classified {i+1}/{len(pubchem_results)} compounds")
+        progress_text.text(f"Classified {i + 1}/{len(pubchem_results)} compounds")
+        time.sleep(0.25)  # delay to avoid API overload
 
     st.success("✅ Done! All compounds processed successfully.")
     result_df = pd.DataFrame(final_results)
