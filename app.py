@@ -2,6 +2,9 @@ import pandas as pd
 import requests
 import time, random, io
 import streamlit as st
+import io
+from streamlit_lottie import st_lottie
+import requests
 
 
 # ------------------ Core Functions ------------------
@@ -106,22 +109,89 @@ def process_file(uploaded_file):
         time.sleep(0.25)  # delay to avoid API overload
 
     st.success("✅ Done! All compounds processed successfully.")
+    st.success("Incomplete details for certain compounds were detected, likely due to API rate limits or missing records. Manual verification is recommended.")
     result_df = pd.DataFrame(final_results)
     return result_df
 
 
-# ------------------ Streamlit UI ------------------
+# ------------------ Load Animation ------------------
+def load_lottie_url(url):
+    r = requests.get(url)
+    if r.status_code != 200:
+        return None
+    return r.json()
 
-st.title("🧪 Chemical Data Extractor (PubChem + ClassyFire)")
-st.write("Upload an Excel file with compound names in the first column.")
+loading_animation = load_lottie_url("https://assets9.lottiefiles.com/packages/lf20_tll0j4bb.json")
+done_animation = load_lottie_url("https://assets1.lottiefiles.com/private_files/lf30_editor_bqvwlczk.json")
 
-uploaded_file = st.file_uploader("Choose an Excel file (.xlsx)", type=["xlsx", "xls"])
+# ------------------ Custom Styling ------------------
+st.markdown("""
+    <style>
+    body {
+        background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+        color: white;
+    }
+    .stApp {
+        background: linear-gradient(135deg, #1e3c72, #2a5298);
+        color: white;
+    }
+    h1 {
+        text-align: center;
+        font-family: 'Segoe UI', sans-serif;
+        color: #ffffff;
+        font-size: 2.5em;
+    }
+    .css-1v3fvcr, .css-18ni7ap {
+        color: #ffffff;
+    }
+    .stButton>button {
+        background: linear-gradient(90deg, #06beb6, #48b1bf);
+        color: white;
+        font-size: 1.1em;
+        border-radius: 10px;
+        height: 3em;
+        width: 15em;
+        margin: 0 auto;
+        display: block;
+        border: none;
+    }
+    .stButton>button:hover {
+        background: linear-gradient(90deg, #43cea2, #185a9d);
+        transform: scale(1.05);
+    }
+    .stFileUploader {
+        text-align: center;
+    }
+    .stDownloadButton>button {
+        background: linear-gradient(90deg, #ff9966, #ff5e62);
+        color: white;
+        font-size: 1.1em;
+        border-radius: 10px;
+        height: 3em;
+        width: 20em;
+        margin: 0 auto;
+        display: block;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# ------------------ Main UI ------------------
+st.title("🧪 Chemical Data Extractor")
+st.markdown("<h3 style='text-align:center; color:#dbe9ff;'>Fetch molecular, lipophilicity & classification data instantly.</h3>", unsafe_allow_html=True)
+st.markdown("<p style='text-align:center;'>Upload an Excel file with compound names in the first column.</p>", unsafe_allow_html=True)
+
+uploaded_file = st.file_uploader("📂 Choose an Excel file (.xlsx)", type=["xlsx", "xls"])
 
 if uploaded_file:
-    if st.button("Start Extraction"):
-        with st.spinner("Processing... Please wait."):
+    if st.button("🚀 Start Extraction"):
+        with st.spinner("Processing compounds... please wait ⏳"):
+            st_lottie(loading_animation, speed=1, height=200, key="loading")
             result_df = process_file(uploaded_file)
-            st.dataframe(result_df)
+
+            st.success("✅ Extraction Complete!")
+            st_lottie(done_animation, height=180, key="done")
+
+            st.dataframe(result_df, use_container_width=True)
 
             # Prepare Excel download
             buffer = io.BytesIO()
@@ -134,3 +204,7 @@ if uploaded_file:
                 file_name="ChemicalData_Output.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
             )
+
+else:
+    st_lottie(loading_animation, speed=0.5, height=250, key="waiting")
+    st.info("👆 Please upload an Excel file to begin extraction.")
