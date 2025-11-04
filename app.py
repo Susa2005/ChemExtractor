@@ -2,13 +2,48 @@ import pandas as pd
 import requests
 import time, random, io
 import streamlit as st
-import io
 from streamlit_lottie import st_lottie
-import requests
 
+# ------------------ XO Game Function ------------------
+def xo_game():
+    st.sidebar.subheader("Play XO (Tic-Tac-Toe) While You Wait!")
+    if "xo_board" not in st.session_state:
+        st.session_state.xo_board = [""] * 9
+        st.session_state.xo_turn = "X"
+        st.session_state.xo_winner = None
+
+    board = st.session_state.xo_board
+    turn = st.session_state.xo_turn
+    winner = st.session_state.xo_winner
+
+    cols = st.sidebar.columns(3)
+    for i in range(3):
+        for j in range(3):
+            idx = i * 3 + j
+            if board[idx] == "":
+                if cols[j].button("", key=f"xo_{idx}"):
+                    board[idx] = turn
+                    turn = "O" if turn == "X" else "X"
+                    st.session_state.xo_turn = turn
+
+    wins = [(0,1,2),(3,4,5),(6,7,8),(0,3,6),(1,4,7),(2,5,8),(0,4,8),(2,4,6)]
+    for a, b, c in wins:
+        if board[a] and board[a] == board[b] and board[a] == board[c]:
+            winner = board[a]
+            st.session_state.xo_winner = winner
+
+    st.sidebar.write("Turn:", turn)
+    if winner:
+        st.sidebar.success(f"{winner} wins! 🎉")
+        if st.sidebar.button("Restart XO Game"):
+            st.session_state.xo_board = [""] * 9
+            st.session_state.xo_turn = "X"
+            st.session_state.xo_winner = None
+
+# Sidebar XO game
+xo_game()
 
 # ------------------ Core Functions ------------------
-
 def get_pubchem_info(compound_name):
     url = f"https://pubchem.ncbi.nlm.nih.gov/rest/pug/compound/name/{compound_name}/property/SMILES,InChIKey,MolecularFormula,XLogP/JSON"
     try:
@@ -24,7 +59,6 @@ def get_pubchem_info(compound_name):
         }
     except Exception:
         return None
-
 
 def get_classyfire_info(inchikey, retries=3, base_delay=1.5):
     if not inchikey:
@@ -43,7 +77,6 @@ def get_classyfire_info(inchikey, retries=3, base_delay=1.5):
         except Exception:
             time.sleep(base_delay + random.uniform(0, 1.5))
     return {'Class': None, 'Subclass': None, 'Superclass': None}
-
 
 def process_file(uploaded_file):
     df = pd.read_excel(uploaded_file)
@@ -64,7 +97,7 @@ def process_file(uploaded_file):
                 break
             else:
                 time.sleep(delay)
-                delay *= 2  # exponential backoff
+                delay *= 2
                 retries -= 1
 
         if data:
@@ -80,7 +113,7 @@ def process_file(uploaded_file):
 
         progress_bar.progress((i + 1) / len(compound_names) * 0.5)
         progress_text.text(f"Fetched PubChem data for {i + 1}/{len(compound_names)} compounds")
-        time.sleep(0.25)  # 0.25s delay to stay within ~4 requests/sec
+        time.sleep(0.25)
 
     st.info("Annotating with ClassyFire sequentially with rate limiting...")
     final_results = []
@@ -106,25 +139,25 @@ def process_file(uploaded_file):
         final_results.append(combined)
         progress_bar.progress(0.5 + (i + 1) / len(pubchem_results) * 0.5)
         progress_text.text(f"Classified {i + 1}/{len(pubchem_results)} compounds")
-        time.sleep(0.25)  # delay to avoid API overload
+        time.sleep(0.25)
 
     st.success("✅ Done! All compounds processed successfully.")
     st.success("Incomplete details for certain compounds were detected, likely due to API rate limits or missing records. Manual verification is recommended.")
     result_df = pd.DataFrame(final_results)
     return result_df
 
-
 # ------------------ Load Animation ------------------
 def load_lottie_url(url):
-    r = requests.get(url)
-    if r.status_code != 200:
+    try:
+        r = requests.get(url)
+        if r.status_code != 200:
+            return None
+        return r.json()
+    except Exception:
         return None
-    return r.json()
 
 loading_animation = load_lottie_url("https://assets9.lottiefiles.com/packages/lf20_tll0j4bb.json")
 done_animation = load_lottie_url("https://assets1.lottiefiles.com/private_files/lf30_editor_bqvwlczk.json")
-
-
 
 # ------------------ Custom Styling ------------------
 st.markdown("""
@@ -187,15 +220,21 @@ uploaded_file = st.file_uploader("📂 Choose an Excel file (.xlsx)", type=["xls
 if uploaded_file:
     if st.button("🚀 Start Extraction"):
         with st.spinner("Processing compounds... please wait ⏳"):
-            st_lottie(loading_animation, speed=1, height=200, key="loading")
+            if loading_animation:
+                st_lottie(loading_animation, speed=1, height=200, key="loading")
+            else:
+                st.info("Loading animation unavailable.")
+
             result_df = process_file(uploaded_file)
 
             st.success("✅ Extraction Complete!")
-            st_lottie(done_animation, height=180, key="done")
+            if done_animation:
+                st_lottie(done_animation, height=180, key="done")
+            else:
+                st.info("Completion animation unavailable.")
 
             st.dataframe(result_df, use_container_width=True)
 
-            # Prepare Excel download
             buffer = io.BytesIO()
             result_df.to_excel(buffer, index=False)
             buffer.seek(0)
@@ -208,5 +247,8 @@ if uploaded_file:
             )
 
 else:
-    st_lottie(loading_animation, speed=0.5, height=250, key="waiting")
+    if loading_animation:
+        st_lottie(loading_animation, speed=0.5, height=250, key="waiting")
+    else:
+        st.info("Welcome! Awaiting file upload (loading animation unavailable).")
     st.info("👆 Please upload an Excel file to begin extraction.")
